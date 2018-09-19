@@ -5,6 +5,9 @@ ASIN Lookup on Amazon.com
 """
 
 import sys
+import re
+from bs4 import BeautifulSoup
+
 
 if sys.version_info > (3, 0):
     # Python 3
@@ -12,12 +15,8 @@ if sys.version_info > (3, 0):
 else:
     # Python 2
     import urllib2
-import copy
-from bs4 import BeautifulSoup
 
 # Query ASIN on Amazon
-
-
 def asin_lookup(product_name):
     # Convert spaces to pluses
     query_product_name = product_name.replace(' ', '+')
@@ -43,39 +42,66 @@ def asin_lookup(product_name):
     
     soup = BeautifulSoup(url_query_response, "html.parser")
 
-    # Look through first five results
-    for i in range(0, 5):
-        query_result = soup.find(id="result_" + str(i))
-        if query_result:
-            # Get ASIN
+    # Finds first result
+    query_result = soup.find(id="result_0")
+    if query_result:
+        msrp = None
+        dollar_amount = None
+        cent_amount = None
+
+        info = {"asin": None, "msrp": None, "price": None}
+
+        # Get ASIN
+        try:
+            asin_string = query_result.attrs['data-asin']
+        except Exception as e:
+            print("Can't find ASIN")
+            return None
+        if asin_string:
+            info["asin"] = asin_string
+
+        # Get msrp
+        msrp_query = query_result.find("span", class_="a-size-base-plus a-color-secondary a-text-strike")
+        if msrp_query:
+            info["msrp"] = parse_msrp(msrp_query.getText())
+        
+        # Get current dollar amount
+        dollar_query = query_result.find("span", class_="sx-price-whole")
+        if dollar_query:
             try:
-                asin_string = query_result.attrs['data-asin']
+                dollar_amount = int(dollar_query.getText())
             except Exception as e:
-                print("Can't find ASIN")
-    
-            # Get msrp
-            msrp_query = query_result.find("span", class_="a-size-base-plus a-color-secondary a-text-strike")
-            if msrp_query:
-                msrp = msrp_query.getText()
-            
-            # Get current dollar amount
-            dollar_query = query_result.find("span", class_="sx-price-whole")
-            if dollar_query:
-                dollar_amount = dollar_query.getText()
+                print("Can't convert current dollar amount to int")
 
-            # Get current cent amount
-            cent_query = query_result.find("sup", class_="sx-price-fractional")
-            if cent_query:
-                cent_amount = cent_query.getText()
+        # Get current cent amount
+        cent_query = query_result.find("sup", class_="sx-price-fractional")
+        if cent_query:
+            try:
+                cent_amount = int(cent_query.getText())    
+            except Exception as e:
+                print("Can't convert current cent amount to int")
 
-            if asin_string: print("ASIN: {}".format(asin_string))
-            if msrp: print("MSRP: {}".format(msrp))
-            if dollar_amount and cent_amount: print("Current price: ${}.{}".format(dollar_amount, cent_amount))
+        # Adds dollar and cents to info
+        if dollar_amount:
+            if cent_amount:
+                info["price"] = tuple(dollar_amount, cent_amount)
+            else:
+                info["price"] = tuple(dollar_amount + 1, 0)
+        
+    return info
 
-        else:
-            break
 
-    return
+def parse_msrp(msrp):
+    split_msrp = re.findall(r"\d+", msrp)
+    if len(split_msrp) != 2:
+        print("Can't parse msrp")
+        return None
+    try:
+        parsed_msrp = tuple(int(part) for part in split_msrp)
+    except Exception as e:
+        print("Error converting list of strings to tuple of ints in parse msrp")
+        return None
+    return parsed_msrp
 
 
 def main(argv=None):
