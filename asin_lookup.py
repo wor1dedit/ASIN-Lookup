@@ -84,9 +84,9 @@ def asin_lookup(product_name):
         # Adds dollar and cents to info
         if dollar_amount:
             if cent_amount:
-                info["price"] = tuple(dollar_amount, cent_amount)
+                info["price"] = (dollar_amount, cent_amount)
             else:
-                info["price"] = tuple(dollar_amount + 1, 0)
+                info["price"] = (dollar_amount + 1, 0)
         
     return info
 
